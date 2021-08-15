@@ -7,6 +7,7 @@ package swift
 
 import (
 	"fmt"
+	"github.com/swift-cache/swift/singleflight"
 	"log"
 	"sync"
 )
@@ -37,6 +38,7 @@ type Group struct {
 	getter    Getter
 	mainCache cache
 	peers     PeerPicker
+	loader    *singleflight.Group
 }
 
 var (
@@ -63,6 +65,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		loader:    &singleflight.Group{},
 	}
 	groups[name] = g
 	return g
@@ -100,17 +103,23 @@ func (g *Group) Get(key string) (ByteView, error) {
 }
 
 func (g *Group) load(key string) (value ByteView, err error) {
-	if g.peers != nil {
-		if peer, ok := g.peers.PickPeer(key); ok {
-			if value, err = g.getFromPeer(peer, key); err == nil {
-				return value, nil
+	view, err := g.loader.Do(key, func() (interface{}, error) {
+		if g.peers != nil {
+			if peer, ok := g.peers.PickPeer(key); ok {
+				if value, err = g.getFromPeer(peer, key); err == nil {
+					return value, nil
+				}
+				log.Println("[GeeCache] Failed to get from peer", err)
 			}
-			log.Println("[GeeCache] Failed to get from peer", err)
 		}
+		return g.getLocal(key)
+	})
+	if err == nil {
+		return view.(ByteView), nil
 	}
-
-	return g.getLocal(key)
+	return
 }
+
 func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 	bytes, err := peer.Get(g.name, key)
 	if err != nil {
