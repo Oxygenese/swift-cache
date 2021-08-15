@@ -34,7 +34,7 @@ func startCacheServer(addr string, addrs []string, s *swift.Group) {
 	peers := swift.NewHTTPPool(addr)
 	peers.Set(addrs...)
 	s.RegisterPeers(peers)
-	log.Println("geecache is running at", addr)
+	log.Println("swift is running at", addr)
 	log.Fatal(http.ListenAndServe(addr[7:], peers))
 }
 
@@ -59,7 +59,7 @@ func startAPIServer(apiAddr string, gee *swift.Group) {
 func main() {
 	var port int
 	var api bool
-	flag.IntVar(&port, "port", 8001, "Geecache server port")
+	flag.IntVar(&port, "port", 8001, "Swift cache server port")
 	flag.BoolVar(&api, "api", false, "Start a api server?")
 	flag.Parse()
 
